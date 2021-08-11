@@ -72,3 +72,17 @@ FROM '/Users/yukili/Projects/HackPrep/data4Atelier/answers_photos.csv'
 DELIMITER ','
 CSV HEADER;
 
+-- select to_timestamp(qDate/1000)
+-- from questions
+-- limit 5;
+ALTER TABLE questions
+ADD datedate timestamp;
+
+UPDATE questions
+SET datedate = to_timestamp(qDate/1000);
+
+ALTER TABLE answers
+ADD datedate timestamp;
+
+UPDATE answers
+SET datedate = to_timestamp(aDate/1000);
