@@ -55,9 +55,10 @@ const getQsByProductId = (id, callback) => {
         from photos p
         group by answer
       ) p on p.answer = a.id
+      where a.reported = false
     group by qID
   ) a on q.id = a.qID
-  where q.productID = ${id};
+  where q.productID = ${id} and q.reported = false;
   `
   pool.query(q, (err, data) => {
     if (err) {
@@ -72,7 +73,7 @@ const getQsByProductId = (id, callback) => {
   });
 };
 
-const getAnsByQId = (qid, callback) => {
+const getAnsByQId = (qid, query, callback) => {
   let q = `
   select
     json_build_object(
@@ -102,7 +103,7 @@ const getAnsByQId = (qid, callback) => {
       group by answer
   ) p
   on p.answer = a.id
-  where a.qID = ${qid};
+  where a.qID = ${qid} and a.reported = false;
   `;
   pool.query(q, (err, results) => {
       if (err) {
@@ -117,9 +118,101 @@ const getAnsByQId = (qid, callback) => {
     })
 };
 
+const addQ = (newq, callback) => {
+  let q = `
+  insert into questions (productID, body, userName, userEmail)
+  values ('${newq.product_id}', '${newq.body}', '${newq.name}', '${newq.email}')
+  `;
+  pool
+    .query(q)
+    .then(()=> {callback(null, )})
+    .catch((err)=> {
+      console.log('error in creating Q in db');
+      console.log(err);
+      callback(err);
+    })
+};
+
+const addAns = (id, newans, callback) => {
+  //if(no images)
+  let q = `
+  insert into answers (qID, body, userName, userEmail)
+  values ('${id}', '${newans.body}', '${newans.name}', '${newans.email}')
+  `;
+  pool
+    .query(q)
+    .then(()=> {callback(null, )})
+    .catch((err)=> {
+      console.log('error in creating ANS in db');
+      console.log(err);
+      callback(err);
+    })
+};
+
+const markQhelpfull = (qid, callback) => {
+  let q = `
+  update questions
+  set helpfulness = (
+    select helpfulness + 1
+    from questions
+    where id = ${qid}
+  )
+  where id = ${qid}
+  `;
+  pool
+    .query(q)
+    .then(()=> {callback(null, )})
+    .catch((err)=> {
+      console.log('error in marking Q helpful in db');
+      console.log(err);
+      callback(err);
+    })
+};
+
+const markAhelpful = (aid, callback) => {
+  let q = `
+  update answers
+  set helpfulness = (
+    select helpfulness + 1
+    from answers
+    where id = ${aid}
+  )
+  where id = ${aid};
+  `;
+  pool
+    .query(q)
+    .then(()=> {callback(null, )})
+    .catch((err)=> {
+      console.log('error in marking A helpful in db');
+      console.log(err);
+      callback(err);
+    })
+};
+
+const reportQ = (qid, callback) => {
+  let q = `
+  update questions
+  set reported = true
+  where id = ${qid};
+  `;
+  pool
+    .query(q)
+    .then(()=> {callback(null, )})
+    .catch((err)=> {
+      console.log('error in report Q in db');
+      console.log(err);
+      callback(err);
+    })
+}
+
 module.exports = {
   getQsByProductId,
   getAnsByQId,
+  addQ,
+  addAns,
+  markQhelpfull,
+  markAhelpful,
+  reportQ,
 }
 
 // select * from answers a
