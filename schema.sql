@@ -123,10 +123,10 @@ CREATE AGGREGATE jsonb_combine(jsonb)
 );
 
 -- indexing
-CREATE INDEX productid_index ON questions(productID);
-CREATE INDEX answers_qID_index ON answers(qID);
+CREATE INDEX productid_index ON questions(productID);--
+CREATE INDEX answers_qID_index ON answers(qID);--
 CREATE INDEX qID_aID_index ON answers(qID, id);
-CREATE INDEX aID_pID_index ON photos(answer, id);
+CREATE INDEX aID_pID_index ON photos(answer, id);--
 CREATE INDEX photo_ansid_index ON photos (answer);
 CREATE INDEX pid_qid_index ON questions(productID, id);
 CREATE INDEX qid_pid_index ON questions(id, productID);
@@ -227,25 +227,56 @@ where q.productID = 1
            5 | Can I wash it?                      | 2020-12-24 19:14:44      | cleopatra   | f        |                    7 | {"id" : 107, "body" : "Yes", "date" : "2021-01-13T03:47:26", "answerer_name" : "Seller", "helpfulness" : 4, "photos" : {"id" : null, "url" : null}}
            6 | Is it noise cancelling?             | 2020-12-24 19:14:44      | coolkid     | t        |                   19 | {"id" : 108, "body" : "No?", "date" : "2021-04-17T05:27:17", "answerer_name" : "warmkid", "helpfulness" : 14, "photos" : {"id" : null, "url" : null}}
 
-EXPLAIN
-with ans_1 as (
-  select
-    qID,
-    json_agg(
-      json_build_object(
-        a.id,
-        json_build_object(
-          'id', a.id,
-          'body', a.body,
-          'date', a.datedate,
-          'answerer_name', a.userName,
-          'helpfulness', a.helpfulness
-        )
-      )
-    ) ans
 
-  from answers a
-  group by a.qID
+EXPLAIN
+with sub_ans as (
+  select * from answers
+  where qID = 1 and reported = false
+)
+, sub_photo as (
+  select * from photos
+  where answer in (select id from answers where qID = 1 and reported = false)
+)
+select
+  a.id AS answer_id,
+  a.body AS body,
+  a.datedate AS date,
+  a.username AS answererName,
+  a.helpfulness AS helpfulness,
+  photo AS photos
+from sub_ans a
+left join (
+    select
+        answer,
+        json_agg(
+            json_build_object(
+                'id', p.id,
+                'url', p.photoUrl
+            )
+        ) photo
+    from
+        sub_photo p
+    group by answer
+) p
+on p.answer = a.id
+;
+
+EXPLAIN
+with sub_ans as (
+  select * from answers
+  where qID in (select id from questions where productID=1 and reported = false)
+)
+, sub_q as (
+  select * from questions
+  where productID = 1 and reported = false
+), sub_photo as (
+  select * from photos
+  where answer in (
+    select id from answers
+    where qID in (
+      select id from questions where productID=1 and reported = false
+    ) and reported = false
+  )
 )
 select
   q.id AS question_id,
@@ -255,5 +286,37 @@ select
   q.reported AS reported,
   q.helpfulness AS question_helpfulness,
   ans AS answers
-from (select * from questions where productID = 1) q
-join ans_1 a on a.qID = q.id;
+from sub_q q
+left join (
+  select
+    qID,
+    jsonb_combine(
+      json_build_object(
+        a.id,
+        json_build_object(
+          'id', a.id,
+          'body', a.body,
+          'date', a.datedate,
+          'answerer_name', a.userName,
+          'helpfulness', a.helpfulness,
+          'photos', pho
+        )
+      ) ::jsonb
+    ) ans
+  from
+    sub_ans a
+    left join (
+      select
+        answer,
+        json_agg(
+          json_build_object(
+            'id', p.id,
+            'url', p.photoUrl
+          )
+        ) pho
+      from sub_photo p
+      group by answer
+    ) p on p.answer = a.id
+  group by qID
+) a on q.id = a.qID
+;
