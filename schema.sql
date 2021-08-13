@@ -114,3 +114,146 @@ ALTER SEQUENCE public.answers_id_seq
 RESTART WITH 7000000;
 ALTER SEQUENCE public.photos_id_seq
 RESTART WITH 2100000;
+
+-- define a new aggregation method
+CREATE AGGREGATE jsonb_combine(jsonb)
+(
+  SFUNC = jsonb_concat(jsonb, jsonb),
+  STYPE = jsonb
+);
+
+-- indexing
+CREATE INDEX productid_index ON questions(productID);
+CREATE INDEX answers_qID_index ON answers(qID);
+CREATE INDEX qID_aID_index ON answers(qID, id);
+CREATE INDEX aID_pID_index ON photos(answer, id);
+CREATE INDEX photo_ansid_index ON photos (answer);
+CREATE INDEX pid_qid_index ON questions(productID, id);
+CREATE INDEX qid_pid_index ON questions(id, productID);
+
+
+
+select jsonb_combine(
+  json_build_object(
+    a.id,
+    json_build_object(
+      'id', a.id,
+      'body', a.body,
+      'date', a.datedate,
+      'answerer_name', a.userName,
+      'helpfulness', a.helpfulness
+    )
+  ) ::jsonb
+)
+from answers a
+WHERE a.qID = 5;
+
+select
+  a.qID,
+  jsonb_combine(
+    json_build_object(
+      a.id,
+      json_build_object(
+        'id', a.id,
+        'body', a.body,
+        'date', a.datedate,
+        'answerer_name', a.userName,
+        'helpfulness', a.helpfulness,
+        'photos', pho
+      )
+    ) ::jsonb
+  ) ans
+from answers a
+WHERE a.qID = 5 and a.reported = false
+join (
+  select
+    answer,
+    json_agg(
+      json_build_object(
+        'id', p.id,
+        'url', p.photoUrl
+      )
+    ) pho
+  from photos p
+  group by answer
+) p on p.answer = a.id
+group by a.qID;
+
+select
+  q.id AS question_id,
+  q.body AS question_body,
+  q.datedate AS question_date,
+  q.userName AS asker_name,
+  q.reported AS reported,
+  q.helpfulness AS question_helpfulness,
+  json_build_object(
+    'id', a.id,
+    'body',a.body,
+    'date', a.datedate,
+    'answerer_name', a.username,
+    'helpfulness', a.helpfulness,
+    'photos',
+      json_build_object(
+        'id', p.id,
+        'url', p.photoUrl
+      )
+  )
+from questions q
+left join answers a on q.id = a.qID
+left join photos p on a.id = p.answer
+where q.productID = 1
+
+     3600000 | are you doing SDC?                  | 2021-08-11 19:58:36.7081 | spongebob   | f        |                    1 | {"id" : null, "body" : null, "date" : null, "answerer_name" : null, "helpfulness" : null, "photos" : {"id" : null, "url" : null}}
+           1 | What fabric is the top made of?     | 2020-07-27 17:18:34      | yankeelover | f        |                    1 | {"id" : 5, "body" : "Something pretty soft but I can't be sure", "date" : "2020-09-13T05:49:20", "answerer_name" : "metslover", "helpfulness" : 5, "photos" : {"id" : 1, "url" : "https://images.unsplash.com/photo-1530519729491-aea5b51d1ee1?ixlib=rb-1.2.1&ixid=eyJhcHBfaWQiOjEyMDd9&auto=format&fit=crop&w=1651&q=80"}}
+           1 | What fabric is the top made of?     | 2020-07-27 17:18:34      | yankeelover | f        |                    1 | {"id" : 5, "body" : "Something pretty soft but I can't be sure", "date" : "2020-09-13T05:49:20", "answerer_name" : "metslover", "helpfulness" : 5, "photos" : {"id" : 2, "url" : "https://images.unsplash.com/photo-1511127088257-53ccfcc769fa?ixlib=rb-1.2.1&ixid=eyJhcHBfaWQiOjEyMDd9&auto=format&fit=crop&w=1650&q=80"}}
+           1 | What fabric is the top made of?     | 2020-07-27 17:18:34      | yankeelover | f        |                    1 | {"id" : 5, "body" : "Something pretty soft but I can't be sure", "date" : "2020-09-13T05:49:20", "answerer_name" : "metslover", "helpfulness" : 5, "photos" : {"id" : 3, "url" : "https://images.unsplash.com/photo-1500603720222-eb7a1f997356?ixlib=rb-1.2.1&ixid=eyJhcHBfaWQiOjEyMDd9&auto=format&fit=crop&w=1653&q=80"}}
+           1 | What fabric is the top made of?     | 2020-07-27 17:18:34      | yankeelover | f        |                    1 | {"id" : 7, "body" : "Its the best! Seriously magic fabric", "date" : "2021-02-27T13:45:24", "answerer_name" : "metslover", "helpfulness" : 7, "photos" : {"id" : null, "url" : null}}
+           1 | What fabric is the top made of?     | 2020-07-27 17:18:34      | yankeelover | f        |                    1 | {"id" : 8, "body" : "DONT BUY IT! It's bad for the environment", "date" : "2020-09-19T17:49:22", "answerer_name" : "metslover", "helpfulness" : 8, "photos" : {"id" : null, "url" : null}}
+           1 | What fabric is the top made of?     | 2020-07-27 17:18:34      | yankeelover | f        |                    1 | {"id" : 57, "body" : "Suede", "date" : "2021-04-11T12:51:31", "answerer_name" : "metslover", "helpfulness" : 7, "photos" : {"id" : null, "url" : null}}
+           1 | What fabric is the top made of?     | 2020-07-27 17:18:34      | yankeelover | f        |                    1 | {"id" : 95, "body" : "Supposedly suede, but I think its synthetic", "date" : "2020-09-14T17:53:52", "answerer_name" : "metslover", "helpfulness" : 3, "photos" : {"id" : null, "url" : null}}
+           2 | HEY THIS IS A WEIRD QUESTION!!!!?   | 2021-02-21 01:16:59      | jbilas      | t        |                    4 | {"id" : 30, "body" : "Its a rubber sole", "date" : "2021-03-20T22:29:56", "answerer_name" : "dschulman", "helpfulness" : 2, "photos" : {"id" : 13, "url" : "https://images.unsplash.com/photo-1528318269466-69d920af5dad?ixlib=rb-1.2.1&ixid=eyJhcHBfaWQiOjEyMDd9&auto=format&fit=crop&w=1650&q=80"}}
+           2 | HEY THIS IS A WEIRD QUESTION!!!!?   | 2021-02-21 01:16:59      | jbilas      | t        |                    4 | {"id" : 75, "body" : "The rubber on the bottom wears thin quickly", "date" : "2020-05-04T22:15:50", "answerer_name" : "dschulman", "helpfulness" : 2, "photos" : {"id" : null, "url" : null}}
+           2 | HEY THIS IS A WEIRD QUESTION!!!!?   | 2021-02-21 01:16:59      | jbilas      | t        |                    4 | {"id" : 84, "body" : "Rubber", "date" : "2021-03-16T00:17:56", "answerer_name" : "dschulman", "helpfulness" : 3, "photos" : {"id" : null, "url" : null}}
+           2 | HEY THIS IS A WEIRD QUESTION!!!!?   | 2021-02-21 01:16:59      | jbilas      | t        |                    4 | {"id" : 102, "body" : "Some kind of recycled rubber, works great!", "date" : "2020-09-24T22:30:12", "answerer_name" : "dschulman", "helpfulness" : 6, "photos" : {"id" : null, "url" : null}}
+           3 | Does this product run big or small? | 2020-12-21 02:31:47      | jbilas      | f        |                    8 | {"id" : null, "body" : null, "date" : null, "answerer_name" : null, "helpfulness" : null, "photos" : {"id" : null, "url" : null}}
+           4 | How long does it last?              | 2020-07-09 20:35:17      | funnygirl   | f        |                    6 | {"id" : 65, "body" : "It runs small", "date" : "2020-11-19T06:11:47", "answerer_name" : "dschulman", "helpfulness" : 1, "photos" : {"id" : 14, "url" : "https://images.unsplash.com/photo-1470116892389-0de5d9770b2c?ixlib=rb-1.2.1&ixid=eyJhcHBfaWQiOjEyMDd9&auto=format&fit=crop&w=1567&q=80"}}
+           4 | How long does it last?              | 2020-07-09 20:35:17      | funnygirl   | f        |                    6 | {"id" : 65, "body" : "It runs small", "date" : "2020-11-19T06:11:47", "answerer_name" : "dschulman", "helpfulness" : 1, "photos" : {"id" : 15, "url" : "https://images.unsplash.com/photo-1536922645426-5d658ab49b81?ixlib=rb-1.2.1&ixid=eyJhcHBfaWQiOjEyMDd9&auto=format&fit=crop&w=1650&q=80"}}
+           4 | How long does it last?              | 2020-07-09 20:35:17      | funnygirl   | f        |                    6 | {"id" : 89, "body" : "Showing no wear after a few months!", "date" : "2020-09-02T19:33:29", "answerer_name" : "sillyguy", "helpfulness" : 8, "photos" : {"id" : null, "url" : null}}
+           5 | Can I wash it?                      | 2020-12-24 19:14:44      | cleopatra   | f        |                    7 | {"id" : 64, "body" : "It says not to", "date" : "2020-05-04T22:15:50", "answerer_name" : "ceasar", "helpfulness" : 0, "photos" : {"id" : null, "url" : null}}
+           5 | Can I wash it?                      | 2020-12-24 19:14:44      | cleopatra   | f        |                    7 | {"id" : 46, "body" : "I've thrown it in the wash and it seems fine", "date" : "2020-11-22T00:27:23", "answerer_name" : "marcanthony", "helpfulness" : 8, "photos" : {"id" : null, "url" : null}}
+           5 | Can I wash it?                      | 2020-12-24 19:14:44      | cleopatra   | f        |                    7 | {"id" : 92, "body" : "Haha, are you serious?", "date" : "2020-09-17T04:12:11", "answerer_name" : "ceasar", "helpfulness" : 0, "photos" : {"id" : null, "url" : null}}
+           5 | Can I wash it?                      | 2020-12-24 19:14:44      | cleopatra   | f        |                    7 | {"id" : 96, "body" : "I wouldn't machine wash it", "date" : "2020-05-27T09:03:41", "answerer_name" : "ceasar", "helpfulness" : 0, "photos" : {"id" : null, "url" : null}}
+           5 | Can I wash it?                      | 2020-12-24 19:14:44      | cleopatra   | f        |                    7 | {"id" : 101, "body" : "Only if you want to ruin it!", "date" : "2020-05-27T09:03:41", "answerer_name" : "ceasar", "helpfulness" : 5, "photos" : {"id" : null, "url" : null}}
+           5 | Can I wash it?                      | 2020-12-24 19:14:44      | cleopatra   | f        |                    7 | {"id" : 107, "body" : "Yes", "date" : "2021-01-13T03:47:26", "answerer_name" : "Seller", "helpfulness" : 4, "photos" : {"id" : null, "url" : null}}
+           6 | Is it noise cancelling?             | 2020-12-24 19:14:44      | coolkid     | t        |                   19 | {"id" : 108, "body" : "No?", "date" : "2021-04-17T05:27:17", "answerer_name" : "warmkid", "helpfulness" : 14, "photos" : {"id" : null, "url" : null}}
+
+EXPLAIN
+with ans_1 as (
+  select
+    qID,
+    json_agg(
+      json_build_object(
+        a.id,
+        json_build_object(
+          'id', a.id,
+          'body', a.body,
+          'date', a.datedate,
+          'answerer_name', a.userName,
+          'helpfulness', a.helpfulness
+        )
+      )
+    ) ans
+
+  from answers a
+  group by a.qID
+)
+select
+  q.id AS question_id,
+  q.body AS question_body,
+  q.datedate AS question_date,
+  q.userName AS asker_name,
+  q.reported AS reported,
+  q.helpfulness AS question_helpfulness,
+  ans AS answers
+from (select * from questions where productID = 1) q
+join ans_1 a on a.qID = q.id;
