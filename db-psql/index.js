@@ -22,18 +22,18 @@ const getQsByProductId = (id, page, count, callback) => {
   let q = `
   with sub_ans as (
     select * from answers
-    where qID in (select id from questions where productID=${id})
+    where qID in (select id from questions where productID=${id} and reported = false)
   )
   , sub_q as (
     select * from questions
-    where productID = ${id}
+    where productID = ${id} and reported = false
   ), sub_photo as (
     select * from photos
     where answer in (
       select id from answers
       where qID in (
-        select id from questions where productID=${id}
-      )
+        select id from questions where productID=${id} and reported = false
+      ) and reported = false
     )
   )
   select
@@ -63,7 +63,7 @@ const getQsByProductId = (id, page, count, callback) => {
       ) ans
     from
       sub_ans a
-      join (
+      left join (
         select
           answer,
           json_agg(
@@ -75,7 +75,6 @@ const getQsByProductId = (id, page, count, callback) => {
         from sub_photo p
         group by answer
       ) p on p.answer = a.id
-      where a.reported = false
     group by qID
   ) a on q.id = a.qID
   ;
@@ -101,6 +100,14 @@ const getAnsByQId = (qid, page, count, callback) => {
   // let offset = (page - 1) * count
   // console.log('OFFSET: ', offset);
   let q = `
+  with sub_ans as (
+    select * from answers
+    where qID = ${qid} and reported = false
+  )
+  , sub_photo as (
+    select * from photos
+    where answer in (select id from answers where qID = ${qid} and reported = false)
+  )
   select
     a.id AS answer_id,
     a.body AS body,
@@ -108,7 +115,7 @@ const getAnsByQId = (qid, page, count, callback) => {
     a.username AS answererName,
     a.helpfulness AS helpfulness,
     photo AS photos
-  from answers a
+  from sub_ans a
   left join (
       select
           answer,
@@ -119,11 +126,11 @@ const getAnsByQId = (qid, page, count, callback) => {
               )
           ) photo
       from
-          photos p
+          sub_photo p
       group by answer
   ) p
   on p.answer = a.id
-  where a.qID = ${qid} and a.reported = false;
+  ;
   `;
   pool.query(q, (err, results) => {
       if (err) {
@@ -158,15 +165,32 @@ const addQ = (newq, callback) => {
 };
 
 const addAns = (id, newans, callback) => {
-  let q = `
-  with ins1 as (
+  // let log = `array[${newans.photos}]`
+  // console.log('PHOTO ARRAY ', log)
+  let q;
+  if (!newans.photos.length) {
+    q = `
     insert into answers (qID, body, userName, userEmail)
-    values ('${id}', '${newans.body}', '${newans.name}', '${newans.email}')
-    returning id
-  )
-  insert into photos (answer, photoUrl)
-  values ((select id from ins1), unnest(array'${newans.photos}'))
-  `;
+    values ('${id}', '${newans.body}', '${newans.name}', '${newans.email}');
+    `
+  } else {
+    urlStr = '';
+    for (let i = 0; i < newans.photos.length; i ++) {
+      urlStr += `'${newans.photos[i]}'` + ', ';
+    }
+    urlStr = urlStr.slice(0, -2);
+    let log = `array[${urlStr}]`
+    console.log('urlStr ', log);
+    q = `
+    with ins1 as (
+      insert into answers (qID, body, userName, userEmail)
+      values ('${id}', '${newans.body}', '${newans.name}', '${newans.email}')
+      returning id
+    )
+    insert into photos (answer, photoUrl)
+    values ((select id from ins1), unnest(array[${urlStr}]))
+    `;
+  }
   pool
     .query(q)
     .then(()=> {callback(null, )})
