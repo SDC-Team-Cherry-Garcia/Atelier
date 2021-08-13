@@ -17,8 +17,25 @@ pool.connect((err) => {
   console.log('DB Connected!');
 })
 
-const getQsByProductId = (id, callback) => {
+const getQsByProductId = (id, page, count, callback) => {
+  // let offset = (page - 1) * count;
   let q = `
+  with sub_ans as (
+    select * from answers
+    where qID in (select id from questions where productID=${id})
+  )
+  , sub_q as (
+    select * from questions
+    where productID = ${id}
+  ), sub_photo as (
+    select * from photos
+    where answer in (
+      select id from answers
+      where qID in (
+        select id from questions where productID=${id}
+      )
+    )
+  )
   select
     q.id AS question_id,
     q.body AS question_body,
@@ -27,23 +44,26 @@ const getQsByProductId = (id, callback) => {
     q.reported AS reported,
     q.helpfulness AS question_helpfulness,
     ans AS answers
-  from questions q
+  from sub_q q
   left join (
     select
       qID,
-      json_agg(
+      jsonb_combine(
         json_build_object(
-          'id', a.id,
-          'body', a.body,
-          'date', a.datedate,
-          'answerer_name', a.userName,
-          'helpfulness', a.helpfulness,
-          'photos', pho
-        )
+          a.id,
+          json_build_object(
+            'id', a.id,
+            'body', a.body,
+            'date', a.datedate,
+            'answerer_name', a.userName,
+            'helpfulness', a.helpfulness,
+            'photos', pho
+          )
+        ) ::jsonb
       ) ans
     from
-      answers a
-      left join (
+      sub_ans a
+      join (
         select
           answer,
           json_agg(
@@ -52,13 +72,13 @@ const getQsByProductId = (id, callback) => {
               'url', p.photoUrl
             )
           ) pho
-        from photos p
+        from sub_photo p
         group by answer
       ) p on p.answer = a.id
       where a.reported = false
     group by qID
   ) a on q.id = a.qID
-  where q.productID = ${id} and q.reported = false;
+  ;
   `
   pool.query(q, (err, data) => {
     if (err) {
@@ -68,26 +88,26 @@ const getQsByProductId = (id, callback) => {
     }
     let resObj = {};
     resObj['product_id'] = id;
-    resObj.results = data.rows;
+    resObj.page = page;
+    resObj.count = count;
+    let start = (page - 1) * count;
+    let end = page * count;
+    resObj.results = data.rows.slice(start, end);
     callback(null, resObj);
   });
 };
 
-const getAnsByQId = (qid, query, callback) => {
+const getAnsByQId = (qid, page, count, callback) => {
+  // let offset = (page - 1) * count
+  // console.log('OFFSET: ', offset);
   let q = `
   select
-    json_build_object(
-      'results', json_agg(
-        json_build_object(
-          'answer_id', a.id,
-          'body', a.body,
-          'date', a.datedate,
-          'answererName', a.username,
-          'helpfulness', a.helpfulness,
-          'photos', photo
-        )
-      )
-    ) results
+    a.id AS answer_id,
+    a.body AS body,
+    a.datedate AS date,
+    a.username AS answererName,
+    a.helpfulness AS helpfulness,
+    photo AS photos
   from answers a
   left join (
       select
@@ -113,7 +133,11 @@ const getAnsByQId = (qid, query, callback) => {
       }
       let resObj = {};
       resObj.question = qid;
-      resObj.results = results.rows[0].results.results;
+      resObj.page = page;
+      resObj.count = count;
+      let start = (page - 1) * count;
+      let end = page * count;
+      resObj.results = results.rows.slice(start, end);
       callback(null, resObj);
     })
 };
@@ -134,10 +158,14 @@ const addQ = (newq, callback) => {
 };
 
 const addAns = (id, newans, callback) => {
-  //if(no images)
   let q = `
-  insert into answers (qID, body, userName, userEmail)
-  values ('${id}', '${newans.body}', '${newans.name}', '${newans.email}')
+  with ins1 as (
+    insert into answers (qID, body, userName, userEmail)
+    values ('${id}', '${newans.body}', '${newans.name}', '${newans.email}')
+    returning id
+  )
+  insert into photos (answer, photoUrl)
+  values ((select id from ins1), unnest(array'${newans.photos}'))
   `;
   pool
     .query(q)
@@ -203,7 +231,23 @@ const reportQ = (qid, callback) => {
       console.log(err);
       callback(err);
     })
-}
+};
+
+const reportA = (aid, CB) => {
+  let q = `
+  update answers
+  set reported = true
+  where id = ${aid};
+  `;
+  pool
+    .query(q)
+    .then(()=> {CB(null, )})
+    .catch((err)=> {
+      console.log('error in report Q in db');
+      console.log(err);
+      CB(err);
+    });
+};
 
 module.exports = {
   getQsByProductId,
@@ -213,6 +257,7 @@ module.exports = {
   markQhelpfull,
   markAhelpful,
   reportQ,
+  reportA
 }
 
 // select * from answers a
@@ -369,3 +414,119 @@ module.exports = {
 //   group by qID
 // ) a on q.id = a.qID
 // where q.id = 1;
+
+//>>>>>>>>>>TO BUILD {id: {}}<<<<<<<<<<<<<<<<<
+// select
+//   jsonb_combine(
+//     json_build_object(
+//       id,
+//       json_build_object(
+//         'answerer', userName,
+//         'body', body,
+//         'date', datedate
+//       )
+//     ) ::jsonb
+//   ) ans
+// from answers
+// where qid = 1;
+
+// select
+//   'answer_id', a.id,
+//   'body', a.body,
+//   'date', a.datedate,
+//   'answererName', a.username,
+//   'helpfulness', a.helpfulness,
+//   'photos', photo
+// from answers a
+// left join (
+//     select
+//         answer,
+//         json_agg(
+//             json_build_object(
+//                 'id', p.id,
+//                 'url', p.photoUrl
+//             )
+//         ) photo
+//     from
+//         photos p
+//     group by answer
+// ) p
+// on p.answer = a.id
+// where a.qID = 1 and a.reported = false
+// LIMIT 2 OFFSET 0;
+
+// select
+//   q.id AS question_id,
+//   q.body AS question_body,
+//   q.datedate AS question_date,
+//   q.userName AS asker_name,
+//   q.reported AS reported,
+//   q.helpfulness AS question_helpfulness,
+//   ans AS answers
+// from questions q
+// left join (
+//   select
+//     qID,
+//     jsonb_combine(
+//       json_build_object(
+//         a.id,
+//         json_build_object(
+//           'id', a.id,
+//           'body', a.body,
+//           'date', a.datedate,
+//           'answerer_name', a.userName,
+//           'helpfulness', a.helpfulness,
+//           'photos', pho
+//         )
+//       ) ::jsonb
+//     ) ans
+//   from
+//     answers a
+//     left join (
+//       select
+//         answer,
+//         json_agg(
+//           json_build_object(
+//             'id', p.id,
+//             'url', p.photoUrl
+//           )
+//         ) pho
+//       from photos p
+//       group by answer
+//     ) p on p.answer = a.id
+//     where a.reported = false
+//   group by qID
+// ) a on q.id = a.qID
+// where q.productID = 1 and q.reported = false
+// limit 2 offset 0;
+
+//>>>>CORRECT ANSWERS VERSION I<<<<
+// select
+//     json_build_object(
+//       'results', json_agg(
+//         json_build_object(
+//           'answer_id', a.id,
+//           'body', a.body,
+//           'date', a.datedate,
+//           'answererName', a.username,
+//           'helpfulness', a.helpfulness,
+//           'photos', photo
+//         )
+//       )
+//     ) results
+//   from answers a
+//   left join (
+//       select
+//           answer,
+//           json_agg(
+//               json_build_object(
+//                   'id', p.id,
+//                   'url', p.photoUrl
+//               )
+//           ) photo
+//       from
+//           photos p
+//       group by answer
+//   ) p
+//   on p.answer = a.id
+//   where a.qID = ${qid} and a.reported = false;
