@@ -1,0 +1,47 @@
+config:
+  target: "http://localhost:3000"
+  phases:
+    - duration: 1
+      arrivalRate: 1000
+
+scenarios:
+  - name: "Get questions for a given product_id"
+    flow:
+      - get:
+          url: "/qa/questions"
+          qs:
+            product_id: 2
+
+# All virtual users finished
+# Summary report @ 18:36:32(-0400) 2021-08-13
+#   Scenarios launched:  750
+#   Scenarios completed: 750
+#   Requests completed:  750
+#   Mean response/sec: 24.57
+#   Response time (msec):
+#     min: 0
+#     max: 373
+#     median: 7
+#     p95: 46
+#     p99: 188
+#   Scenario counts:
+#     Get questions for a given product_id: 750 (100%)
+#   Codes:
+#     200: 750
+
+# All virtual users finished
+# Summary report @ 18:40:25(-0400) 2021-08-13
+#   Scenarios launched:  750
+#   Scenarios completed: 750
+#   Requests completed:  750
+#   Mean response/sec: 24.62
+#   Response time (msec):
+#     min: 0
+#     max: 144
+#     median: 6
+#     p95: 14
+#     p99: 28
+#   Scenario counts:
+#     Get questions for a given product_id: 750 (100%)
+#   Codes:
+#     200: 750

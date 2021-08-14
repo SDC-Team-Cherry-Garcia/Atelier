@@ -1,0 +1,29 @@
+config:
+  target: "http://localhost:3000"
+  phases:
+    - duration: 30
+      arrivalRate: 25
+
+scenarios:
+  - name: "Get answers for given question_ids"
+    flow:
+      - get:
+          url: "/qa/questions/1/answers"
+
+
+# All virtual users finished
+# Summary report @ 15:49:42(-0400) 2021-08-13
+#   Scenarios launched:  750
+#   Scenarios completed: 750
+#   Requests completed:  750
+#   Mean response/sec: 24.61
+#   Response time (msec):
+#     min: 0
+#     max: 229
+#     median: 5
+#     p95: 25
+#     p99: 120
+#   Scenario counts:
+#     Get answers for given question_ids: 750 (100%)
+#   Codes:
+#     200: 750s
