@@ -1,0 +1,24 @@
+config:
+  target: "http://localhost:3000"
+  payload:
+    # path is relative to the location of the test script
+    #path: "/Users/yukili/Projects/HackPrep/data4Atelier/new_questions.csv"
+    path: "./test.csv"
+    fields:
+      - "body"
+      - "name"
+      - "email"
+      - "product_id"
+    order: sequence
+    skipHeader: true
+
+scenarios:
+  # - name: 'testing for post q'
+  - flow:
+      - post:
+          url: "/qa/questions"
+          json:
+            body: "{{ body }}"
+            name: "{{ name }}"
+            email: "{{ email }}"
+            product_id: "{{ product_id }}"
