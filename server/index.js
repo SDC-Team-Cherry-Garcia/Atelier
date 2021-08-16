@@ -7,10 +7,22 @@ const PORT = 3000;
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
+app.get('/qa/questions/test', (req, res) => {
+  res.send('this is a testing endpoint');
+});
+
+//loader.io auth
+app.get('/loaderio-8e182296fa73e5283e7f0f48c410dfc0/', (req, res)=> {
+  res.send('loaderio-8e182296fa73e5283e7f0f48c410dfc0');
+})
+
 app.get('/qa/questions', (req, res) => {
-  console.log('REQ PARAM ', req.params);
-  console.log('REQ BODY ', req.body);
-  console.log('REQ QUERY ', req.query);
+  // console.log('REQ PARAM ', req.params);
+  // console.log('REQ BODY ', req.body);
+  // console.log('REQ QUERY ', req.query);
+  if (!req.query.product_id) {
+    res.send('no product id provided, try again...')
+  }
   db.getQsByProductId(req.query.product_id, req.query.page||1, req.query.count||5, (err, result) => {
     if (err) {
       console.log('failed to get Qs from server');
@@ -21,8 +33,8 @@ app.get('/qa/questions', (req, res) => {
 });
 
 app.get('/qa/questions/:question_id/answers', (req, res) => {
-  console.log('REQ QUERY ', req.query);
-  console.log('REQ PARAM ', req.params);
+  // console.log('REQ QUERY ', req.query);
+  // console.log('REQ PARAM ', req.params);
   db.getAnsByQId(req.params.question_id, req.query.page||1, req.query.count||5, (err, result) => {
     if (err) {
       console.log('failed to get answer list from server');
