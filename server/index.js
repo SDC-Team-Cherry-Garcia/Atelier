@@ -1,10 +1,12 @@
 const express = require('express');
 const db = require('../db-psql');
-//add load balancer
-// const cluster = require('cluster')
-// const numCPUs = require('os').cpus().length;
+const redis = require('redis');
 //add db caching tool
 const ExpressRedisCache = require('express-redis-cache');
+const client = redis.createClient(6379, '18.222.239.196');
+client.on('connect', function() {
+  console.log('redis Connected!');
+});
 
 const app = express();
 const PORT = 3000;
@@ -13,46 +15,43 @@ const cache = ExpressRedisCache();
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// if (cluster.isMaster) {
-//   console.log(`Master ${process.pid} is running`);
-//   for (let i = 0; i < numCPUs; i++) {
-//     cluster.fork();
-//   }
-//   cluster.on('exit', (worker, code, signal) => {
-//     console.log(`worker ${worker.process.pid} died`);
-//   });
-// } else {
-//   app.listen(PORT, err => {
-//     err ?
-//     console.log("Error in server setup") :
-//     console.log(`Worker ${process.pid} started`);
-//   });
-// }
-
 app.get('/qa/questions/test', (req, res) => {
   res.send('this is a testing endpoint');
 });
 
 //loader.io auth
-app.get('/loaderio-8e182296fa73e5283e7f0f48c410dfc0/', (req, res)=> {
-  res.send('loaderio-8e182296fa73e5283e7f0f48c410dfc0');
+app.get('/loaderio-565a7e46e76c5814f76b1b47e9f6e01b/', (req, res)=> {
+  res.send('loaderio-565a7e46e76c5814f76b1b47e9f6e01b');
 })
 
-app.get('/qa/questions', cache.route(), (req, res) => {
-  // console.log('REQ PARAM ', req.params);
-  // console.log('REQ BODY ', req.body);
-  // console.log('REQ QUERY ', req.query);
-  if (!req.query.product_id) {
+app.get('/qa/questions', cache.route(), (req, res) => { //cache.route(),
+  console.log('here! in worker 1');
+  let product = req.query.product_id;
+  if (!product) {
     res.send('no product id provided, try again...')
   }
-  db.getQsByProductId(req.query.product_id, req.query.page||1, req.query.count||5, (err, result) => {
-    if (err) {
-      console.log('failed to get Qs from server');
-      res.sendStatus(404);
+  client.get(product, (err, reply) => {
+    if (reply !== null) {
+      res.status(200).send(reply);
+    } else {
+      db.getQsByProductId(product, req.query.page||1, req.query.count||5, (err, result) => {
+        if (err) {
+          console.log('failed to get Qs from server');
+          res.sendStatus(404);
+        }
+        res.status(200).json(result);
+        result = JSON.stringify(result);
+        client.set(product, result, (err, reply) => {
+          if (err) {
+            console.log('failed to set in Redis');
+          }
+        })
+      })
     }
-    res.status(200).json(result);
   })
 });
+
+
 
 app.get('/qa/questions/:question_id/answers', (req, res) => {
   // console.log('REQ QUERY ', req.query);
