@@ -1,5 +1,5 @@
 # Atelier
-System design of the backend for a web application to support production-level traffic
+System design of the backend for the e-commerce web application (CatWalk) to support production-level traffic
 
 ## initial setup
 ![image](https://user-images.githubusercontent.com/81717356/132621668-5acaae3c-1f42-44d2-8cda-bfd9caa34afd.png)
