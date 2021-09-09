@@ -1,0 +1,20 @@
+proxy_cache_path /path/to/cache levels=1:2 keys_zone=my_cache:10m max_size=10g inactive=60m use_temp_path=off;
+upstream sdcgroup {
+  least_conn;
+  keepalive 500;
+  server <instance public ip>:80;
+  server <instance public ip>:80;
+  server <instance public ip>:80;
+}
+server {
+  listen 80 backlog=4096;
+  gzip on;
+
+  location / {
+    proxy_http_version 1.1;
+    proxy_set_header Connection "";
+    proxy_cache my_cache;
+    proxy_pass http://sdcgroup;
+    add_header X-Cache-Status $upstream_cache_status;
+  }
+}
